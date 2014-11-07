@@ -129,6 +129,7 @@ typedef struct BDRVRawState {
 #ifdef CONFIG_XFS
     bool is_xfs : 1;
 #endif
+    bool has_discard;
 } BDRVRawState;
 
 static int fd_open(BlockDriverState *bs);
@@ -169,6 +170,7 @@ static int raw_open_common(BlockDriverState *bs, const char *filename,
     }
     s->fd = fd;
     s->aligned_buf = NULL;
+    s->has_discard = true;
 
     if ((bdrv_flags & BDRV_O_NOCACHE)) {
         /*
