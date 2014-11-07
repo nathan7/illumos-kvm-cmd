@@ -786,13 +786,32 @@ static int xfs_discard(BDRVRawState *s, int64_t sector_num, int nb_sectors)
 
 static int raw_discard(BlockDriverState *bs, int64_t sector_num, int nb_sectors)
 {
-#ifdef CONFIG_XFS
     BDRVRawState *s = bs->opaque;
 
-    if (s->is_xfs) {
-        return xfs_discard(s, sector_num, nb_sectors);
+    if (!s->has_discard) {
+        return -ENOTSUP;
     }
+
+    if (aiocb->aio_type & QEMU_AIO_BLKDEV) {
+        dkioc_free_t df = { .df_flags = 0, df_reserved = 0, .df_start = aiocb->aio_offset, .df_length = aiocb->aio_nbytes };
+        do {
+            if (ioctl(aiocb->aio_fildes, DKIOCFREE, df) == 0) {
+                return 0;
+            }
+        } while (errno == EINTR);
+    } else {
+#ifdef CONFIG_XFS
+        if (s->is_xfs) {
+            return xfs_discard(s, sector_num, nb_sectors);
+        }
 #endif
+    }
+
+    if (ret == -ENODEV || ret == -ENOSYS || ret == -EOPNOTSUPP ||
+        ret == -ENOTTY) {
+        s->has_discard = false;
+        ret = -ENOTSUP;
+    }
 
     return 0;
 }
