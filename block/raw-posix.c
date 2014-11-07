@@ -788,26 +788,31 @@ static int xfs_discard(BDRVRawState *s, int64_t sector_num, int nb_sectors)
 
 static int raw_discard(BlockDriverState *bs, int64_t sector_num, int nb_sectors)
 {
+    int ret = -EOPNOTSUPP;
     BDRVRawState *s = bs->opaque;
 
     if (!s->has_discard) {
         return -ENOTSUP;
     }
 
-    if (aiocb->aio_type & QEMU_AIO_BLKDEV) {
+    if (s->is_xfs) {
+#ifdef CONFIG_XFS
+        ret = xfs_discard(s, sector_num, nb_sectors);
+#endif
+    }
+
+#ifdef DKIOCFREE
+    else if (s->type == FTYPE_FILE) {
         dkioc_free_t df = { .df_flags = 0, df_reserved = 0, .df_start = aiocb->aio_offset, .df_length = aiocb->aio_nbytes };
         do {
-            if (ioctl(aiocb->aio_fildes, DKIOCFREE, df) == 0) {
+            if (ioctl(s->fd, DKIOCFREE, df) == 0) {
                 return 0;
             }
         } while (errno == EINTR);
-    } else {
-#ifdef CONFIG_XFS
-        if (s->is_xfs) {
-            return xfs_discard(s, sector_num, nb_sectors);
-        }
-#endif
+
+        ret = -errno;
     }
+#endif
 
     if (ret == -ENODEV || ret == -ENOSYS || ret == -EOPNOTSUPP ||
         ret == -ENOTTY) {
@@ -815,7 +820,7 @@ static int raw_discard(BlockDriverState *bs, int64_t sector_num, int nb_sectors)
         ret = -ENOTSUP;
     }
 
-    return 0;
+    return ret;
 }
 
 static QEMUOptionParameter raw_create_options[] = {
