@@ -795,15 +795,15 @@ static int raw_discard(BlockDriverState *bs, int64_t sector_num, int nb_sectors)
         return -ENOTSUP;
     }
 
-    if (s->is_xfs) {
 #ifdef CONFIG_XFS
+    else if (s->is_xfs) {
         ret = xfs_discard(s, sector_num, nb_sectors);
-#endif
     }
+#endif
 
 #ifdef DKIOCFREE
     else if (s->type == FTYPE_FILE) {
-        dkioc_free_t df = { .df_flags = 0, df_reserved = 0, .df_start = aiocb->aio_offset, .df_length = aiocb->aio_nbytes };
+        dkioc_free_t df = { .df_flags = 0, .df_reserved = 0, .df_start = sector_num * BDRV_SECTOR_SIZE, .df_length = nb_sectors * BDRV_SECTOR_SIZE };
         do {
             if (ioctl(s->fd, DKIOCFREE, df) == 0) {
                 return 0;
